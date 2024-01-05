@@ -32,7 +32,12 @@ from alarm_backends.core.cache.cmdb import (
     TopoManager,
 )
 from bkmonitor.commons.tools import is_ipv6_biz
-from bkmonitor.models import MetricListCache, StrategyHistoryModel, StrategyModel
+from bkmonitor.models import (
+    AlgorithmModel,
+    MetricListCache,
+    StrategyHistoryModel,
+    StrategyModel,
+)
 from bkmonitor.strategy.new_strategy import Strategy, parse_metric_id
 from bkmonitor.utils.common_utils import chunks, count_md5
 from bkmonitor.utils.kubernetes import is_k8s_target
@@ -134,8 +139,11 @@ class StrategyCacheManager(CacheManager):
         }
 
         need_check_type = [DataTypeLabel.ALERT, DataTypeLabel.TIME_SERIES]
+        algorithms_type = ""
         # 检测单位与数据单位是否同族，多指标无需检测
         if item["algorithms"]:
+            # 取出 type 值，在后面的指标检查中做判断
+            algorithms_type = item["algorithms"][0].get("type", "")
             unit_prefix = item["algorithms"][0].get("unit_prefix", "")
             unit = item["query_configs"][0].get("unit", "")
             if invalid_strategy_dict["loaded_unit"].get(unit):
@@ -165,7 +173,10 @@ class StrategyCacheManager(CacheManager):
                 if data_type == DataTypeLabel.ALERT and data_source == DataSourceLabel.BK_MONITOR_COLLECTOR:
                     # 关联的策略待验证是否失效
                     invalid_strategy_dict["related_ids_map"][query_config["bkmonitor_strategy_id"]].add(strategy["id"])
-                if metric_id in invalid_strategy_dict["checked_metric_ids"]["exists"]:
+                if (
+                    metric_id in invalid_strategy_dict["checked_metric_ids"]["exists"]
+                    or algorithms_type == AlgorithmModel.AlgorithmChoices.MultivariateAnomalyDetection
+                ):
                     continue
                 elif metric_id in invalid_strategy_dict["checked_metric_ids"]["not_exists"]:
                     invalid_strategy_dict[data_type_map[data_type]].add(strategy["id"])
